@@ -506,7 +506,7 @@ def generate_quiz(topics, questions_per_topic=4):
                 f"- Exactly 1 strictly accurate correct answer based on the notes.\n"
                 f"- Exactly 3 plausible, realistic, educational distractors.\n"
                 f"Return ONLY a valid JSON array in this format:\n"
-                f'[{"question": "...", "answer": "...", "distractors": ["...", "...", "..."]}]'
+                '[{"question": "...", "answer": "...", "distractors": ["...", "...", "..."]}]'
             )
             raw_qs = call_gemini_api(prompt, api_key)
             for item in raw_qs:
