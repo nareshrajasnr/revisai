@@ -267,8 +267,8 @@ def semantic_question_synthesizer(cleaned_text, topic_name, n=4):
     topic_lower = topic_name.lower()
 
     # Domain Pattern 1: Physics / Newton's Laws / Inertia / Mechanics / Forces
-    if any(k in text_lower or k in topic_lower for k in ["inertia", "newton", "velocity", "force", "acceleration", "motion", "rest", "momentum", "friction"]):
-        if any(k in text_lower or k in topic_lower for k in ["inertia", "rest", "velocity", "external"]):
+    if any(k in topic_lower for k in ["inertia", "newton", "velocity", "force", "acceleration", "motion", "rest", "momentum", "friction"]):
+        if any(k in topic_lower for k in ["inertia", "rest", "velocity", "external"]):
             questions.append({
                 "topic": topic_name,
                 "question": f"According to the fundamental law of {topic_name}, what condition is required to alter an object's state of rest or uniform motion?",
@@ -318,7 +318,7 @@ def semantic_question_synthesizer(cleaned_text, topic_name, n=4):
             })
 
     # Domain Pattern 2: Computer Science / Python / Programming / OOP
-    elif any(k in text_lower or k in topic_lower for k in ["python", "function", "def", "list", "dict", "tuple", "variable", "class", "decorator", "mutable", "loop", "syntax"]):
+    elif any(k in topic_lower for k in ["python", "function", "def", "list", "dict", "tuple", "variable", "class", "decorator", "mutable", "loop", "syntax"]):
         questions.append({
             "topic": topic_name,
             "question": f"In {topic_name}, which statement accurately describes the syntax and declaration of functions?",
@@ -368,7 +368,7 @@ def semantic_question_synthesizer(cleaned_text, topic_name, n=4):
         })
 
     # Domain Pattern 3: Biology / Cellular Respiration / Photosynthesis / Genetics
-    elif any(k in text_lower or k in topic_lower for k in ["respiration", "atp", "cell", "glucose", "mitochondria", "glycolysis", "krebs", "dna", "enzyme", "membrane"]):
+    elif any(k in topic_lower for k in ["respiration", "atp", "cell", "glucose", "mitochondria", "glycolysis", "krebs", "dna", "enzyme", "membrane"]):
         questions.append({
             "topic": topic_name,
             "question": f"In the biological study of {topic_name}, what is the primary role of adenosine triphosphate (ATP)?",
@@ -406,7 +406,7 @@ def semantic_question_synthesizer(cleaned_text, topic_name, n=4):
         })
 
     # Domain Pattern 4: Operating Systems / Systems / Concurrency / Deadlocks
-    elif any(k in text_lower or k in topic_lower for k in ["deadlock", "operating system", "process", "coffman", "mutex", "preemption", "banker", "concurrency", "thread"]):
+    elif any(k in topic_lower for k in ["deadlock", "operating system", "process", "coffman", "mutex", "preemption", "banker", "concurrency", "thread"]):
         questions.append({
             "topic": topic_name,
             "question": f"In operating systems, which condition defines a {topic_name} state among concurrent processes?",
@@ -444,7 +444,7 @@ def semantic_question_synthesizer(cleaned_text, topic_name, n=4):
         })
 
     # Domain Pattern 5: Economics / Markets / Microeconomics
-    elif any(k in text_lower or k in topic_lower for k in ["market", "competition", "monopoly", "oligopoly", "price", "demand", "supply", "revenue"]):
+    elif any(k in topic_lower for k in ["market", "competition", "monopoly", "oligopoly", "price", "demand", "supply", "revenue"]):
         questions.append({
             "topic": topic_name,
             "question": f"Under the microeconomic framework of {topic_name}, why are firms in Perfect Competition designated as 'price takers'?",
@@ -471,10 +471,18 @@ def semantic_question_synthesizer(cleaned_text, topic_name, n=4):
 
     # Fallback General Academic Conceptual Synthesizer (for ANY other subject)
     if len(questions) < n:
-        clauses = [c.strip() for c in re.split(r"[.\n;!?]+", cleaned_text) if len(c.strip().split()) >= 4]
-        if not clauses:
+        raw_clauses = [c.strip() for c in re.split(r"[.\n;!?]+", cleaned_text) if len(c.strip().split()) >= 4]
+
+        def is_clean_clause(c):
+            # Rejects clauses that are mostly OCR noise: too short, or too few
+            # actual letters relative to stray symbols/fragments.
+            letters = sum(ch.isalpha() for ch in c)
+            return len(c) >= 15 and letters / max(len(c), 1) >= 0.6
+
+        clauses = list(dict.fromkeys(c for c in raw_clauses if is_clean_clause(c)))
+        if not clauses and is_clean_clause(cleaned_text.strip()):
             clauses = [cleaned_text.strip()]
-        
+
         words = re.findall(r"\b[A-Za-z][A-Za-z0-9_-]{3,}\b", cleaned_text)
         stopwords = {"this", "that", "with", "from", "have", "were", "been", "they", "will", "what", "which", "into", "their"}
         keywords = [w for w in words if w.lower() not in stopwords]
