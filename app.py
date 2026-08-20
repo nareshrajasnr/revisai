@@ -93,44 +93,85 @@ def clean_ocr_text(text):
 
 
 # ---------------------------------------------------------------------------
-# Cross-Platform OCR Pipeline (Tesseract via pytesseract)
+# Cloud OCR Pipeline (OCR.space free API)
 # ---------------------------------------------------------------------------
-def run_tesseract_ocr(image_path):
-    """Runs Tesseract OCR on the given image and returns cleaned lines of text."""
-    try:
-        import pytesseract
-    except ImportError:
-        print("pytesseract not installed - OCR unavailable. Use pasted text instead.")
-        return []
+# Running Tesseract locally needs its own process memory on top of Flask +
+# matplotlib + Pillow — on a 512MB free-tier host that combination can
+# exceed the limit and get the whole worker OOM-killed. Sending the image to
+# a free cloud OCR API instead means this process never has to run an OCR
+# engine itself, so it stays light no matter the host's RAM budget.
+#
+# Get a free key (no credit card) at https://ocr.space/ocrapi/freekey and set
+# it as the OCR_SPACE_API_KEY environment variable. Without one, the shared
+# demo key "helloworld" is used — it works, but is rate-limited and shared
+# across everyone who hasn't set their own key, so expect occasional failures.
+OCR_SPACE_API_KEY = os.environ.get("OCR_SPACE_API_KEY", "helloworld")
+OCR_SPACE_URL = "https://api.ocr.space/parse/image"
 
+
+def call_ocrspace_ocr(image_path, api_key):
+    """Sends the image to the OCR.space cloud API and returns cleaned lines of text."""
     try:
-        with Image.open(image_path) as img:
-            raw_text = pytesseract.image_to_string(img)
+        boundary = uuid.uuid4().hex
+        with open(image_path, "rb") as f:
+            file_bytes = f.read()
+
+        fields = {"apikey": api_key, "language": "eng", "OCREngine": "2", "scale": "true"}
+        parts = []
+        for name, value in fields.items():
+            parts.append(f"--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n")
+        parts.append(
+            f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"image.png\"\r\n"
+            f"Content-Type: image/png\r\n\r\n"
+        )
+        body = "".join(parts).encode("utf-8") + file_bytes + f"\r\n--{boundary}--\r\n".encode("utf-8")
+
+        req = urllib.request.Request(
+            OCR_SPACE_URL,
+            data=body,
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+        )
+        with urllib.request.urlopen(req, timeout=25) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+
+        if result.get("IsErroredOnProcessing"):
+            print(f"OCR.space error: {result.get('ErrorMessage')}")
+            return []
+
+        parsed = result.get("ParsedResults") or []
+        if not parsed:
+            return []
+
+        raw_text = parsed[0].get("ParsedText", "")
+        raw_lines = raw_text.strip().splitlines()
+        return [clean_ocr_text(l.strip()) for l in raw_lines if len(l.strip()) > 0]
     except Exception as e:
-        print(f"Tesseract OCR execution error: {e}")
+        print(f"OCR.space request failed: {e}")
         return []
-
-    raw_lines = raw_text.strip().splitlines()
-    return [clean_ocr_text(l.strip()) for l in raw_lines if len(l.strip()) > 0]
 
 
 def preprocess_image_for_ocr(input_path, output_path):
-    """Enhances contrast and sharpness for optimal OCR on student handwriting and notes."""
+    """Shrinks and lightly enhances the image before sending it to OCR.space.
+
+    Downscaling keeps the upload small and fast (the free OCR.space tier caps
+    uploads at 1MB) and grayscale is enough for OCR while cutting file size.
+    """
     try:
         with Image.open(input_path) as img:
             if img.mode != "RGB":
                 img = img.convert("RGB")
-            
-            max_dim = 2000
+
+            max_dim = 1600
             if max(img.size) > max_dim:
                 img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
-            
+
             enhancer = ImageEnhance.Contrast(img)
             img = enhancer.enhance(1.4)
             sharp_enhancer = ImageEnhance.Sharpness(img)
             img = sharp_enhancer.enhance(1.3)
-            
-            img.save(output_path, "PNG")
+
+            img = img.convert("L")
+            img.save(output_path, "PNG", optimize=True)
             return True
     except Exception as e:
         print(f"Image preprocessing warning: {e}")
@@ -153,7 +194,7 @@ def extract_text_from_image(file_storage):
     target_path = enhanced_temp_path if os.path.exists(enhanced_temp_path) else raw_temp_path
 
     try:
-        lines = run_tesseract_ocr(target_path)
+        lines = call_ocrspace_ocr(target_path, OCR_SPACE_API_KEY)
     finally:
         for p in [raw_temp_path, enhanced_temp_path]:
             if os.path.exists(p):
