@@ -1,0 +1,89 @@
+{% extends "_base.html" %}
+{% block title %}RevisAI — Your results{% endblock %}
+{% block content %}
+<section class="max-w-4xl mx-auto px-6 pt-12 pb-4">
+  <p class="tag-eyebrow mb-3">03 · Diagnosis</p>
+  <h1 class="font-display font-bold text-2xl md:text-3xl chalk-underline" style="color:var(--ink-2);">
+    Here's where to focus next
+    <svg viewBox="0 0 300 10" preserveAspectRatio="none"><path d="M2 6 C 60 2, 240 9, 298 4" stroke="var(--amber)" stroke-width="3" fill="none" stroke-linecap="round"/></svg>
+  </h1>
+</section>
+
+<section class="max-w-4xl mx-auto px-6 grid sm:grid-cols-3 gap-4 pb-6">
+  <div class="card-note rounded-sm p-5 text-center">
+    <p class="tag-eyebrow mb-1">Overall score</p>
+    <p class="font-display font-bold text-3xl" style="color:var(--ink-2);">{{ overall }}%</p>
+    <p class="text-xs text-gray-500 mt-1">{{ total_correct }}/{{ total_questions }} correct</p>
+  </div>
+  <div class="card-note rounded-sm p-5 text-center">
+    <p class="tag-eyebrow mb-1">Weakest topic</p>
+    <p class="font-display font-bold text-lg leading-tight" style="color:var(--ink-2);">{{ weakest }}</p>
+  </div>
+  <div class="card-note rounded-sm p-5 text-center">
+    <p class="tag-eyebrow mb-1">Avg. time / question</p>
+    <p class="font-display font-bold text-3xl" style="color:var(--ink-2);">{{ avg_time_all }}s</p>
+    <p class="text-xs text-gray-500 mt-1">Attempt #{{ attempt_num }}</p>
+  </div>
+</section>
+
+<section class="max-w-4xl mx-auto px-6 pb-8">
+  <div class="card-note rounded-sm p-4">
+    <img src="data:image/png;base64,{{ chart_b64 }}" alt="Topic-wise mastery chart" class="w-full h-auto">
+  </div>
+</section>
+
+{% if progress_chart_b64 %}
+<section class="max-w-4xl mx-auto px-6 pb-8">
+  <p class="tag-eyebrow mb-2">Revision progress</p>
+  <div class="card-note rounded-sm p-4">
+    <img src="data:image/png;base64,{{ progress_chart_b64 }}" alt="Progress across attempts" class="w-full h-auto">
+  </div>
+</section>
+{% endif %}
+
+<section class="max-w-4xl mx-auto px-6 pb-8">
+  <p class="tag-eyebrow mb-3">Confidence vs. accuracy, by topic</p>
+  <div class="space-y-3">
+    {% for topic, g in gap_report.items() %}
+    <div class="card-note rounded-sm p-4 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <p class="font-semibold text-sm" style="color:var(--ink-2);">{{ topic }}</p>
+        <p class="text-xs text-gray-500 mt-1">
+          {{ g.correct_questions }}/{{ g.total_questions }} correct · accuracy {{ g.accuracy }}% ·
+          self-confidence {{ g.confidence }}% · avg {{ g.avg_time }}s/question
+        </p>
+      </div>
+      <span class="text-xs font-semibold px-3 py-1 rounded-full border {{ g.badge_class }}">{{ g.verdict }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+{% if mistakes %}
+<section class="max-w-4xl mx-auto px-6 pb-8">
+  <p class="tag-eyebrow mb-3">Mistakes to revisit</p>
+  <div class="space-y-3">
+    {% for m in mistakes %}
+    <div class="card-note rounded-sm p-4">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <p class="tag-eyebrow">{{ m.topic }}</p>
+        <span class="text-xs font-semibold px-3 py-1 rounded-full border
+          {% if 'Concept' in m.kind %}bg-rose-100 text-rose-800 border-rose-200{% else %}bg-amber-100 text-amber-800 border-amber-200{% endif %}">
+          {{ m.kind }}
+        </span>
+      </div>
+      <p class="text-sm font-medium mb-2" style="color:var(--ink-2);">{{ m.question }}</p>
+      <p class="text-xs text-gray-600">Your answer: <span class="font-medium" style="color:#8c2f22;">{{ m.chosen }}</span></p>
+      <p class="text-xs text-gray-600">Correct answer: <span class="font-medium" style="color:#1f5c33;">{{ m.answer }}</span></p>
+      <p class="text-xs text-gray-500 mt-1">Confidence at the time: {{ m.confidence }}/5 · {{ m.time_taken }}s taken</p>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section class="max-w-4xl mx-auto px-6 pb-16 flex flex-wrap gap-3">
+  <a href="{{ url_for('retake') }}" class="btn-amber px-6 py-3 rounded-sm text-sm inline-block">Retake this quiz</a>
+  <a href="{{ url_for('reset') }}" class="btn-ghost px-6 py-3 rounded-sm text-sm inline-block">Start with new topics</a>
+</section>
+{% endblock %}

@@ -1,0 +1,121 @@
+{% extends "_base.html" %}
+{% block title %}RevisAI — Find your weak topics{% endblock %}
+{% block content %}
+<section class="max-w-4xl mx-auto px-6 pt-12 pb-6">
+  <p class="tag-eyebrow mb-3">01 · Bring your notes</p>
+  <h1 class="font-display font-bold text-3xl md:text-4xl leading-tight chalk-underline" style="color:var(--ink-2);">
+    Turn your revision notes into a diagnostic quiz
+    <svg viewBox="0 0 300 10" preserveAspectRatio="none"><path d="M2 6 C 60 2, 240 9, 298 4" stroke="var(--amber)" stroke-width="3" fill="none" stroke-linecap="round"/></svg>
+  </h1>
+  <p class="mt-5 text-gray-700 max-w-2xl">
+    Add 3–5 topics — upload a photo of your notes or paste the text. RevisAI generates targeted
+    multiple-choice questions per topic, then scores your accuracy against your confidence to show
+    you exactly where to revise next.
+  </p>
+</section>
+
+<section class="max-w-4xl mx-auto px-6 pb-4">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="mb-4 px-4 py-3 rounded-sm text-sm font-medium" style="background:#e7f3ea; border:1px solid #bcdcc4; color:#1f5c33;">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  {% if error %}
+    <div class="mb-4 px-4 py-3 rounded-sm text-sm font-medium" style="background:#fbe9e7; border:1px solid #f3c2bc; color:#8c2f22;">
+      {{ error }}
+    </div>
+  {% endif %}
+</section>
+
+<section class="max-w-4xl mx-auto px-6 pb-16">
+  <form action="{{ url_for('upload') }}" method="POST" enctype="multipart/form-data" class="space-y-5">
+
+    <div id="topics-wrap" class="space-y-5"></div>
+
+    <div class="flex flex-wrap items-center gap-3">
+      <button type="button" id="add-topic-btn" class="btn-ghost px-4 py-2 rounded-sm text-sm">+ Add another topic</button>
+      <span id="topic-count-note" class="tag-eyebrow"></span>
+    </div>
+
+    <div class="card-note rounded-sm p-5">
+      <p class="tag-eyebrow mb-2">Optional</p>
+      <label class="block text-sm font-semibold mb-1" style="color:var(--ink-2);">Gemini API key</label>
+      <p class="text-xs text-gray-600 mb-2">Leave blank to use the built-in offline question engine. Add a key for richer, AI-written questions.</p>
+      <input type="password" name="gemini_api_key" placeholder="AIza…" value="{{ api_key or '' }}"
+             class="w-full border border-gray-300 rounded-sm px-3 py-2 text-sm font-mono-lbl focus:outline-none focus:ring-2" style="--tw-ring-color:var(--amber);">
+    </div>
+
+    <div class="flex flex-wrap gap-3 pt-2">
+      <button type="submit" class="btn-amber px-6 py-3 rounded-sm text-sm">Generate my quiz</button>
+      <form action="{{ url_for('load_sample') }}" method="POST">
+        <button type="submit" class="btn-ghost px-6 py-3 rounded-sm text-sm">Try a sample set instead</button>
+      </form>
+    </div>
+  </form>
+</section>
+
+<template id="topic-template">
+  <div class="card-note rounded-sm p-5 topic-block">
+    <div class="flex items-center justify-between mb-3">
+      <p class="tag-eyebrow topic-eyebrow">Topic</p>
+      <button type="button" class="remove-topic-btn text-xs font-mono-lbl" style="color:#8c2f22;">Remove</button>
+    </div>
+    <label class="block text-sm font-semibold mb-1" style="color:var(--ink-2);">Topic name</label>
+    <input type="text" name="topic_names" placeholder="e.g. Newton's Laws"
+           class="w-full border border-gray-300 rounded-sm px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2" style="--tw-ring-color:var(--amber);">
+
+    <div class="grid md:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-semibold mb-1" style="color:var(--ink-2);">Photo of your notes</label>
+        <input type="file" name="photos" accept="image/*"
+               class="w-full text-sm border border-gray-300 rounded-sm px-3 py-2 bg-white">
+      </div>
+      <div>
+        <label class="block text-sm font-semibold mb-1" style="color:var(--ink-2);">…or paste the text</label>
+        <textarea name="topic_texts" rows="3" placeholder="Paste your notes here (15+ characters)"
+                  class="w-full border border-gray-300 rounded-sm px-3 py-2 text-sm focus:outline-none focus:ring-2" style="--tw-ring-color:var(--amber);"></textarea>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+  const wrap = document.getElementById('topics-wrap');
+  const tpl = document.getElementById('topic-template');
+  const addBtn = document.getElementById('add-topic-btn');
+  const countNote = document.getElementById('topic-count-note');
+  const MAX_TOPICS = 5;
+  const MIN_TOPICS = 3;
+
+  function relabel() {
+    const blocks = wrap.querySelectorAll('.topic-block');
+    blocks.forEach((b, i) => {
+      b.querySelector('.topic-eyebrow').textContent = 'Topic ' + (i + 1) + ' of ' + blocks.length;
+      const removeBtn = b.querySelector('.remove-topic-btn');
+      removeBtn.style.display = blocks.length > MIN_TOPICS ? 'inline' : 'none';
+    });
+    addBtn.style.display = blocks.length >= MAX_TOPICS ? 'none' : 'inline-block';
+    countNote.textContent = blocks.length + ' / ' + MAX_TOPICS + ' topics';
+  }
+
+  function addTopic() {
+    const blocks = wrap.querySelectorAll('.topic-block').length;
+    if (blocks >= MAX_TOPICS) return;
+    const node = tpl.content.cloneNode(true);
+    node.querySelector('.remove-topic-btn').addEventListener('click', (e) => {
+      e.target.closest('.topic-block').remove();
+      relabel();
+    });
+    wrap.appendChild(node);
+    relabel();
+  }
+
+  addBtn.addEventListener('click', addTopic);
+  for (let i = 0; i < MIN_TOPICS; i++) addTopic();
+</script>
+{% endblock %}
